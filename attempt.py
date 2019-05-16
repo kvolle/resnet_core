@@ -4,15 +4,15 @@ from tensorflow.contrib.slim.nets import resnet_v2
 from tensorflow.contrib.framework.python.ops import arg_scope
 
 class network:
-    def __init__(self):
+    def __init__(self, input1, input2, match):
         with arg_scope(resnet_v2.resnet_arg_scope()) as scope:
             with tf.variable_scope("", reuse=tf.AUTO_REUSE) as scope:
-                self.inputs1 = tf.placeholder(tf.float32, shape=(None, 240, 192, 3))
-                self.inputs2 = tf.placeholder(tf.float32, shape=(None, 240, 192, 3))
-                self.match = tf.placeholder(tf.bool, shape=(None))
-                out1 = self.side(self.inputs1)
+                #self.inputs1 = tf.placeholder(tf.float32, shape=(None, 240, 192, 3))
+                #self.inputs2 = tf.placeholder(tf.float32, shape=(None, 240, 192, 3))
+                #self.match = tf.placeholder(tf.bool, shape=(None))
+                out1 = self.side(input1)
                 scope.reuse_variables()
-                out2 = self.side(self.inputs2)
+                out2 = self.side(input2)
 
                 self.diff = tf.norm(tf.subtract(out1, out2), name="diff")
                 self.margin = 25.0
@@ -63,9 +63,36 @@ class network:
         self.distance_unmatched = tf.multiply(non_match, self.diff, name = "distance_unmatched")
 
         return tf.reduce_sum(self.distance_matching)+ tf.reduce_sum(self.distance_unmatched)
+def _parse_function(example_proto):
+    feature = {
+        'img_a': tf.FixedLenFeature([], tf.string),
+        'img_b': tf.FixedLenFeature([], tf.string),
+        'match': tf.FixedLenFeature([], tf.int64)
+    }
+    features = tf.parse_single_example(example_proto, feature)
+    # Convert the image data from string back to the numbers
+    image_a = tf.decode_raw(features['img_a'], tf.int64, name="Steve")
+    image_b = tf.decode_raw(features['img_b'], tf.int64, name="Greg")
+    match = tf.cast(features['match'], tf.int32)
 
+    # Reshape image data into the original shape
+    image_a = tf.reshape(image_a, [image_size, image_size, 3])
+    image_b = tf.reshape(image_b, [image_size, image_size, 3])
 
-network = network()
+    return image_a, image_b, match
+
+# prepare data and tf.session
+#data_path = ['datasets/gray.tfrecords','datasets/gray2.tfrecords']
+data_path = glob.glob('datasets/color*.tfrecords')
+dataset = tf.data.TFRecordDataset(data_path)
+dataset = dataset.map(_parse_function)  # Parse the record into tensors.
+dataset = dataset.shuffle(buffer_size=1000)
+dataset = dataset.repeat()  # Repeat the input indefinitely.
+dataset = dataset.batch(64)
+iterator = dataset.make_initializable_iterator()
+[x1, x2, y] = iterator.get_next()
+
+network = network(x1, x2, y)
 
 with tf.Session() as sess:
     tf.initialize_all_variables().run()
