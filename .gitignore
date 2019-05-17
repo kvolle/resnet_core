@@ -1,0 +1,8 @@
+.idea/
+*.pyc
+log/*
+model/*
+datasets/*
+
+!*/.gitkeep
+
