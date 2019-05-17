@@ -4,6 +4,9 @@ from tensorflow.contrib.slim.nets import resnet_v2
 from tensorflow.contrib.framework.python.ops import arg_scope
 import glob
 
+image_width = 240
+image_height = 192
+
 class network:
     def __init__(self, input1, input2, match):
         with arg_scope(resnet_v2.resnet_arg_scope()) as scope:
@@ -11,9 +14,13 @@ class network:
                 #self.inputs1 = tf.placeholder(tf.float32, shape=(None, 240, 192, 3))
                 #self.inputs2 = tf.placeholder(tf.float32, shape=(None, 240, 192, 3))
                 #self.match = tf.placeholder(tf.bool, shape=(None))
-                out1 = self.side(input1)
+                self.x1 = tf.scalar_mul(0.003922, tf.cast(input1, dtype=tf.float32))
+                self.x2 = tf.scalar_mul(0.003922, tf.cast(input2, dtype=tf.float32))
+                self.match = tf.cast(match, dtype=tf.float32)
+
+                out1 = self.side(self.x1)
                 scope.reuse_variables()
-                out2 = self.side(input2)
+                out2 = self.side(self.x2)
 
                 self.diff = tf.norm(tf.subtract(out1, out2), name="diff")
                 self.margin = 25.0
@@ -60,7 +67,7 @@ class network:
         return self.fc3
 
     def loss_fcn(self):
-        self.distance_matching = tf.multiply(self.match,self.diff,name="distance_matching")
+        self.distance_matching = tf.multiply(self.match, self.diff,name="distance_matching")
         non_match = tf.subtract(tf.constant(self.margin, dtype=tf.float32, name="margin"), self.diff, name="margin_minus_diff")
         self.distance_unmatched = tf.multiply(non_match, self.diff, name = "distance_unmatched")
 
@@ -78,8 +85,8 @@ def _parse_function(example_proto):
     match = tf.cast(features['match'], tf.int32)
 
     # Reshape image data into the original shape
-    image_a = tf.reshape(image_a, [image_size, image_size, 3])
-    image_b = tf.reshape(image_b, [image_size, image_size, 3])
+    image_a = tf.reshape(image_a, [image_width, image_height, 3])
+    image_b = tf.reshape(image_b, [image_width, image_height, 3])
 
     return image_a, image_b, match
 
@@ -96,8 +103,10 @@ iterator = dataset.make_initializable_iterator()
 
 network = network(x1, x2, y)
 
-with tf.InteractiveSession() as sess:
+#with tf.InteractiveSession() as sess:
+with tf.Session() as sess:
     tf.initialize_all_variables().run()
+    sess.run(iterator.initializer)
     variables_can_be_restored = tf.train.list_variables("./model/")
     list_of_variables = []
     for v in variables_can_be_restored:
