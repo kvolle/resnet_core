@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.contrib.slim.nets import resnet_v2
 from tensorflow.contrib.framework.python.ops import arg_scope
+import glob
 
 class network:
     def __init__(self, input1, input2, match):
