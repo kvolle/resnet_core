@@ -16,6 +16,7 @@ class network:
 
                 self.diff = tf.norm(tf.subtract(out1, out2), name="diff")
                 self.margin = 25.0
+                self.loss = self.loss_fcn()
 
     def fcl(self, input_layer, nodes, name):
         # Pass through to conv_layer. renamed function for easier readability
@@ -57,7 +58,7 @@ class network:
         self.fc3 = self.fcl(self.fc2, 512, "fc3")
         return self.fc3
 
-    def loss(self):
+    def loss_fcn(self):
         self.distance_matching = tf.multiply(self.match,self.diff,name="distance_matching")
         non_match = tf.subtract(tf.constant(self.margin, dtype=tf.float32, name="margin"), self.diff, name="margin_minus_diff")
         self.distance_unmatched = tf.multiply(non_match, self.diff, name = "distance_unmatched")
@@ -94,38 +95,43 @@ iterator = dataset.make_initializable_iterator()
 
 network = network(x1, x2, y)
 
-with tf.Session() as sess:
+with tf.InteractiveSession() as sess:
     tf.initialize_all_variables().run()
     variables_can_be_restored = tf.train.list_variables("./model/")
     list_of_variables = []
     for v in variables_can_be_restored:
         list_of_variables.append(v[0]+":0")
-        #print(v[0]+":0")
-    #print("Global~~~")
+
     globals=[]
     for v in tf.global_variables():
         globals.append(v.name)
         #print(v.name)"""
 
-    #reduced_list = list(set(tf.get_collection_ref(tf.GraphKeys.GLOBAL_VARIABLES)).intersection(set(list_of_variables)))
     reduced_list = list(set(globals).intersection(list_of_variables))
     pretrained_vars = tf.contrib.framework.get_variables_to_restore(include=reduced_list)
-    #pretrained_vars = tf.contrib.framework.get_variables_to_restore(include=["resnet_v2_101"])
 
     tf_pretrained_saver = tf.train.Saver(pretrained_vars, name="pretrained_saver")
     tf_saver = tf.train.Saver(name="saver")
     tf_pretrained_saver.restore(sess, "./model/model.ckpt-30452")
-    """
-    vars = []
-    for v in variables_can_be_restored:
-        var_name = v[0]
-        print(var_name)
-    """
-    writer = tf.summary.FileWriter("log/", sess.graph)
-    writer.close()
 
-    test1 = np.ones([1, 240, 192, 3])
-    test2 = np.zeros([1, 240, 192, 3])
-    test = sess.run(network.diff,feed_dict={network.inputs1:test1, network.inputs2:test2})
-    print(test)
+    writer = tf.summary.FileWriter("log/", sess.graph)
+
+    N = 2000000
+    train_step = tf.train.GradientDescentOptimizer(0.0001).minimize(network.loss)
+    # Create a coordinator and run all QueueRunner objects
+    coord = tf.train.Coordinator()
+    threads = tf.train.start_queue_runners(coord=coord)
+    for step in range(N):
+        _, loss_v = sess.run([train_step, network.loss])
+        if step % 1000 == 0:
+            # print(str(step) + ", " +str(loss_v))
+            ll = sess.run(network.acc)
+            writer.add_summary(ll, step)
+        if np.isnan(loss_v):
+            print('Model diverged with loss = NaN')
+            tf_saver.save(sess, 'model/Final')
+            quit()
+        if step % 10000 == 0:
+            tf_saver.save(sess, 'model/intermediate', global_step=step)
+    writer.close()
     print("Fin")
