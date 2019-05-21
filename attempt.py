@@ -61,9 +61,9 @@ class network:
     def side(self, input):
         net1, end_points1 = resnet_v2.resnet_v2_101(input, None, is_training=True, global_pool=False, output_stride=16)
         arranged = tf.reshape(net1, shape=[-1, 1, 1, 12 * 15 * 2048], name="arrange_for_fcl")
-        self.fc1 = self.fcl(arranged, 1024, "fc1")
-        self.fc2 = self.fcl(self.fc1, 2048, "fc2")
-        self.fc3 = self.fcl(self.fc2, 512, "fc3")
+        self.fc1 = self.fcl(arranged, 256, "fc1")  # 1024
+        self.fc2 = self.fcl(self.fc1, 512, "fc2")  # 2048
+        self.fc3 = self.fcl(self.fc2, 128, "fc3")   # 512
         return self.fc3
 
     def loss_fcn(self):
