@@ -5,8 +5,8 @@ from tensorflow.contrib.framework.python.ops import arg_scope
 from matplotlib import pyplot as plt
 import glob
 
-image_width = 240
-image_height = 192
+image_width = 640 #240
+image_height = 480 #192
 
 class network:
     def __init__(self, input1, input2, match):
@@ -24,13 +24,13 @@ class network:
                 out2 = self.side(self.x2)
 
                 self.diff = tf.reshape(tf.subtract(out1, out2), [-1,out2.shape[3]])
-                self.dist = tf.norm(self.diff, axis=1, name="diff")
+                self.dist = tf.norm(self.diff, axis=1, name="get_distance_between_vecs")
                 self.margin = 25.0
                 self.loss = self.loss_fcn()
                 self.acc = self.acc_fcn()
 
     def fcl(self, input_layer, nodes, name):
-        # Pass through to conv_layer. renamed function for easier readability
+        # Pass th#rough to conv_layer. renamed function for easier readability
         layer = self.conv_layer(input_layer, [1, 1, input_layer.shape[3], nodes], name, padding='VALID', stride=1, pooling=False)
         return layer
 
@@ -63,7 +63,9 @@ class network:
                               padding='SAME')
     def side(self, input):
         net1, end_points1 = resnet_v2.resnet_v2_101(input, None, is_training=True, global_pool=False, output_stride=16)
-        arranged = tf.reshape(net1, shape=[-1, 1, 1, 12 * 15 * 2048], name="arrange_for_fcl")
+        shrunk = tf.nn.max_pool(value=net1, ksize=[1, 3, 3, 1], strides=[1, 3, 3, 1], padding='SAME')
+        arranged = tf.reshape(shrunk, shape=[-1, 1, 1, 14 * 10 * 2048], name="arrange_for_fcl") #40*30
+        # arranged = tf.reshape(net1, shape=[-1, 1, 1, 12 * 15 * 2048], name="arrange_for_fcl")
         self.fc1 = self.fcl(arranged, 256, "fc1")  # 1024
         self.fc2 = self.fcl(self.fc1, 512, "fc2")  # 2048
         self.fc3 = self.fcl(self.fc2, 128, "fc3")   # 512
@@ -89,13 +91,13 @@ def _parse_function(example_proto):
     }
     features = tf.parse_single_example(example_proto, feature)
     # Convert the image data from string back to the numbers
-    image_a = tf.decode_raw(features['img_a'], tf.int64, name="Steve")
-    image_b = tf.decode_raw(features['img_b'], tf.int64, name="Greg")
+    image_a = tf.image.decode_jpeg(features['img_a'], channels=3, name="Steve")
+    image_b = tf.image.decode_jpeg(features['img_b'], channels=3, name="Greg")
     match = tf.cast(features['match'], tf.int32)
 
     # Reshape image data into the original shape
-    image_a = tf.reshape(image_a, [image_width, image_height, 3])
-    image_b = tf.reshape(image_b, [image_width, image_height, 3])
+    #image_a = tf.reshape(image_a, [image_width, image_height, 3])
+    #image_b = tf.reshape(image_b, [image_width, image_height, 3])
 
     return image_a, image_b, match
 
@@ -128,7 +130,7 @@ dataset = tf.data.TFRecordDataset(data_path)
 dataset = dataset.map(_parse_function)  # Parse the record into tensors.
 dataset = dataset.shuffle(buffer_size=1000)
 dataset = dataset.repeat()  # Repeat the input indefinitely.
-dataset = dataset.batch(8)
+dataset = dataset.batch(4)
 iterator = dataset.make_initializable_iterator()
 [x1, x2, y] = iterator.get_next()
 
