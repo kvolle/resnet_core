@@ -101,19 +101,34 @@ def _parse_function(example_proto):
 
     return image_a, image_b, match
 
+def write_img_pair(left, right, value, folder, i):
+    left_cast = tf.cast(tf.scalar_mul(255., tf.cast(left, dtype=tf.float32)), dtype=tf.uint8)
+    rite_cast = tf.cast(tf.scalar_mul(255., tf.cast(right, dtype=tf.float32)), dtype=tf.uint8)
+    left_image = tf.image.encode_jpeg(left_cast, format='rgb', quality=100)
+    rite_image = tf.image.encode_jpeg(rite_cast, format='rgb', quality=100)
+    spec = tf.Session()
+    [data_left, data_rite] = spec.run([left_image, rite_image])
+    with open(folder+'img'+str(i)+'_'+str(value).replace('.','_')+'l.jpg', 'wb') as fd:
+        fd.write(data_left)
+    with open(folder+'img'+str(i)+'_'+str(value).replace('.','_')+'r.jpg', 'wb') as fd:
+        fd.write(data_rite)
 
 def histogram(sess, net, dataset):
-    n_bins = 20
-    bin_max = 20
+    n_bins = 30
+    bin_max = 30
     dist_diff=[]
     dist_same=[]
-    for i in range(100):
-        [mb, dist] = sess.run([net.match, net.dist])
-        for (match, value) in zip(mb, dist):
+    for i in range(500):
+        [mb, dist, x1, x2] = sess.run([net.match, net.dist, net.x1, net.x2])
+        for (match, value, left, right) in zip(mb, dist, x1, x2):
             if (match):
                 dist_same.append(min(value, bin_max-0.001))
+                if (value < 2.):
+                    write_img_pair(left, right, value, 'true_pos/', i)
             else:
                 dist_diff.append(min(value, bin_max-0.001))
+                if (value < 2. and value > 0.):
+                    write_img_pair(left, right, value, 'false_pos/', i)
 
     fig, axs = plt.subplots(1, 2, sharey=True, tight_layout=True)
     # Fix the range
@@ -163,7 +178,7 @@ with tf.Session() as sess:
 
     writer = tf.summary.FileWriter("log/", sess.graph)
 
-    N = 100000
+    N = 00000
     train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
