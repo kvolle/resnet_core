@@ -29,10 +29,12 @@ class network:
                 self.loss = self.loss_fcn()
                 self.acc = self.acc_fcn()
 
-    def fcl(self, input_layer, nodes, name):
+    def fcl(self, input_layer, nodes, name, keep_rate=1.):
         # Pass th#rough to conv_layer. renamed function for easier readability
         layer = self.conv_layer(input_layer, [1, 1, input_layer.shape[3], nodes], name, padding='VALID', stride=1, pooling=False)
-        return layer
+#        out = tf.nn.dropout(layer, rate=#drop_rate)
+        out = tf.nn.dropout(layer, keep_prob=keep_rate)
+        return out
 
     def conv_layer(self, input_layer, weights, name, padding, stride=1, pooling=True):
         # with tf.variable_scope(name) as scope:
@@ -66,9 +68,9 @@ class network:
         shrunk = tf.nn.max_pool(value=net1, ksize=[1, 3, 3, 1], strides=[1, 3, 3, 1], padding='SAME')
         arranged = tf.reshape(shrunk, shape=[-1, 1, 1, 14 * 10 * 2048], name="arrange_for_fcl") #40*30
         # arranged = tf.reshape(net1, shape=[-1, 1, 1, 12 * 15 * 2048], name="arrange_for_fcl")
-        self.fc1 = self.fcl(arranged, 256, "fc1")  # 1024
-        self.fc2 = self.fcl(self.fc1, 512, "fc2")  # 2048
-        self.fc3 = self.fcl(self.fc2, 128, "fc3")   # 512
+        self.fc1 = self.fcl(arranged, 256, "fc1", 0.70)  # 1024
+        self.fc2 = self.fcl(self.fc1, 512, "fc2", 0.90)  # 2048
+        self.fc3 = self.fcl(self.fc2, 128, "fc3", 1.00)   # 512
         return self.fc3
 
     def loss_fcn(self):
@@ -118,13 +120,13 @@ def histogram(sess, net, dataset):
     bin_max = 30
     dist_diff=[]
     dist_same=[]
-    for i in range(500):
+    for i in range(100):
         [mb, dist, x1, x2] = sess.run([net.match, net.dist, net.x1, net.x2])
         for (match, value, left, right) in zip(mb, dist, x1, x2):
             if (match):
                 dist_same.append(min(value, bin_max-0.001))
                 if (value < 2.):
-                   # write_img_pair(left, right, value, 'true_pos/', i)
+                   write_img_pair(left, right, value, 'true_pos/', i)
                    continue 
             else:
                 dist_diff.append(min(value, bin_max-0.001))
@@ -179,7 +181,7 @@ with tf.Session() as sess:
 
     writer = tf.summary.FileWriter("log/", sess.graph)
 
-    N = 10000
+    N = 5000
     train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
