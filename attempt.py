@@ -124,7 +124,8 @@ def histogram(sess, net, dataset):
             if (match):
                 dist_same.append(min(value, bin_max-0.001))
                 if (value < 2.):
-                    write_img_pair(left, right, value, 'true_pos/', i)
+                   # write_img_pair(left, right, value, 'true_pos/', i)
+                   continue 
             else:
                 dist_diff.append(min(value, bin_max-0.001))
                 if (value < 2. and value > 0.):
@@ -178,7 +179,7 @@ with tf.Session() as sess:
 
     writer = tf.summary.FileWriter("log/", sess.graph)
 
-    N = 00000
+    N = 10000
     train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
