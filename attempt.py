@@ -120,9 +120,11 @@ def histogram(sess, net, dataset):
     bin_max = 30
     dist_diff=[]
     dist_same=[]
-    for i in range(100):
+    file = open('dist_log.csv','w')
+    for i in range(500):
         [mb, dist, x1, x2] = sess.run([net.match, net.dist, net.x1, net.x2])
         for (match, value, left, right) in zip(mb, dist, x1, x2):
+            file.write('%d, %f\n' % (match, value))
             if (match):
                 dist_same.append(min(value, bin_max-0.001))
                 if (value < 2.):
@@ -132,7 +134,7 @@ def histogram(sess, net, dataset):
                 dist_diff.append(min(value, bin_max-0.001))
                 if (value < 2. and value > 0.):
                     write_img_pair(left, right, value, 'false_pos/', i)
-
+    file.close()
     fig, axs = plt.subplots(1, 2, sharey=True, tight_layout=True)
     # Fix the range
     axs[0].hist(dist_same, bins=n_bins, range=[0., bin_max])
@@ -142,8 +144,8 @@ def histogram(sess, net, dataset):
     plt.show()
 
 # prepare data and tf.session
-data_path = glob.glob('datasets/color*.tfrecords')
-#data_path = glob.glob('datasets/validation.tfrecords')
+data_path = glob.glob('datasets/training*.tfrecords')
+#data_path = glob.glob('datasets/valid*.tfrecords')
 dataset = tf.data.TFRecordDataset(data_path)
 dataset = dataset.map(_parse_function)  # Parse the record into tensors.
 dataset = dataset.shuffle(buffer_size=1000)
@@ -181,7 +183,7 @@ with tf.Session() as sess:
 
     writer = tf.summary.FileWriter("log/", sess.graph)
 
-    N = 5000
+    N = 10000
     train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
