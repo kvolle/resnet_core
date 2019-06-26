@@ -5,8 +5,8 @@ from tensorflow.contrib.framework.python.ops import arg_scope
 from matplotlib import pyplot as plt
 import glob
 
-image_width = 640 #240
-image_height = 480 #192
+image_width = 320 #240
+image_height = 240 #192
 
 class network:
     def __init__(self, input1, input2, match):
@@ -25,7 +25,7 @@ class network:
 
                 self.diff = tf.reshape(tf.subtract(out1, out2), [-1,out2.shape[3]])
                 self.dist = tf.norm(self.diff, axis=1, name="get_distance_between_vecs")
-                self.margin = 25.0
+                self.margin = 256.0
                 self.loss = self.loss_fcn()
                 self.acc = self.acc_fcn()
 
@@ -66,8 +66,7 @@ class network:
     def side(self, input):
         net1, end_points1 = resnet_v2.resnet_v2_101(input, None, is_training=True, global_pool=False, output_stride=16)
         shrunk = tf.nn.max_pool(value=net1, ksize=[1, 3, 3, 1], strides=[1, 3, 3, 1], padding='SAME')
-        arranged = tf.reshape(shrunk, shape=[-1, 1, 1, 14 * 10 * 2048], name="arrange_for_fcl") #40*30
-        # arranged = tf.reshape(net1, shape=[-1, 1, 1, 12 * 15 * 2048], name="arrange_for_fcl")
+        arranged = tf.reshape(shrunk, shape=[-1, 1, 1, 7 * 5 * 2048], name="arrange_for_fcl") #40*30
         self.fc1 = self.fcl(arranged, 256, "fc1", 0.70)  # 1024
         self.fc2 = self.fcl(self.fc1, 512, "fc2", 0.90)  # 2048
         self.fc3 = self.fcl(self.fc2, 128, "fc3", 1.00)   # 512
@@ -115,16 +114,17 @@ def write_img_pair(left, right, value, folder, i):
     with open(folder+'img'+str(i)+'_'+str(value).replace('.','_')+'r.jpg', 'wb') as fd:
         fd.write(data_rite)
 
-def histogram(sess, net, dataset):
-    n_bins = 30
-    bin_max = 30
+def histogram(sess, net, dataset, step=""):
+    n_bins = 100
+    bin_max = 300
     dist_diff=[]
     dist_same=[]
     file = open('dist_log.csv','w')
     for i in range(500):
         [mb, dist, x1, x2] = sess.run([net.match, net.dist, net.x1, net.x2])
         for (match, value, left, right) in zip(mb, dist, x1, x2):
-            file.write('%d, %f\n' % (match, value))
+            if step=="":
+                file.write('%d, %f\n' % (match, value))
             if (match):
                 dist_same.append(min(value, bin_max-0.001))
                 if (value < 2.):
@@ -139,18 +139,23 @@ def histogram(sess, net, dataset):
     # Fix the range
     axs[0].hist(dist_same, bins=n_bins, range=[0., bin_max])
     axs[0].set_title("Same Image Dist")
+    axs[0].set_ylim(top=2000)
     axs[1].hist(dist_diff, bins=n_bins, range=[0., bin_max])
     axs[1].set_title("Diff Image Dist")
-    plt.show()
+    axs[1].set_ylim(top=2000)
+    if step == "":
+        plt.show()
+    else:
+        plt.savefig('Upped-'+step+'.png')
 
 # prepare data and tf.session
-data_path = glob.glob('datasets/training*.tfrecords')
-#data_path = glob.glob('datasets/valid*.tfrecords')
+#data_path = glob.glob('datasets/training*.tfrecords')
+data_path = glob.glob('datasets/valid_*.tfrecords')
 dataset = tf.data.TFRecordDataset(data_path)
 dataset = dataset.map(_parse_function)  # Parse the record into tensors.
 dataset = dataset.shuffle(buffer_size=1000)
 dataset = dataset.repeat()  # Repeat the input indefinitely.
-dataset = dataset.batch(4)
+dataset = dataset.batch(15)
 iterator = dataset.make_initializable_iterator()
 [x1, x2, y] = iterator.get_next()
 
@@ -183,7 +188,7 @@ with tf.Session() as sess:
 
     writer = tf.summary.FileWriter("log/", sess.graph)
 
-    N = 10000
+    N = 0000
     train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
@@ -198,8 +203,10 @@ with tf.Session() as sess:
             print('Model diverged with loss = NaN')
             tf_saver.save(sess, 'model/Final')
             quit()
-        if step % 10000 == 0:
+        if step % 20000 == 0:
             tf_saver.save(sess, 'model/intermediate', global_step=step)
+        if step % 5000 == 0:
+            histogram(sess, network, dataset, str(step))
     writer.close()
     tf_saver.save(sess, 'model/Final')
     histogram(sess, network, dataset)
