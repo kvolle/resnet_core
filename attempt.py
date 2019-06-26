@@ -23,7 +23,8 @@ class network:
                 scope.reuse_variables()
                 out2 = self.side(self.x2)
 
-                self.diff = tf.reshape(tf.subtract(out1, out2), [-1,out2.shape[3]])
+                #self.diff = tf.reshape(tf.subtract(out1, out2), [-1,out2.shape[3]])
+                self.diff = tf.subtract(out1, out2)
                 self.dist = tf.norm(self.diff, axis=1, name="get_distance_between_vecs")
                 self.margin = 2.0
                 self.loss = self.loss_fcn()
@@ -70,7 +71,8 @@ class network:
         self.fc1 = self.fcl(arranged, 256, "fc1", 0.70)  # 1024
         self.fc2 = self.fcl(self.fc1, 512, "fc2", 0.90)  # 2048
         self.fc3 = self.fcl(self.fc2, 128, "fc3", 1.00)   # 512
-        self.norm = tf.nn.l2_normalize(self.fc3, axis=1)
+        self.out_reshape = tf.reshape(self.fc3, shape=[-1, 128], name="arrange_for_norm")
+        self.norm = tf.nn.l2_normalize(self.out_reshape, axis=1)
         return self.norm
 
     def loss_fcn(self):
