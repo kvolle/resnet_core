@@ -25,7 +25,7 @@ class network:
 
                 self.diff = tf.reshape(tf.subtract(out1, out2), [-1,out2.shape[3]])
                 self.dist = tf.norm(self.diff, axis=1, name="get_distance_between_vecs")
-                self.margin = 256.0
+                self.margin = 2.0
                 self.loss = self.loss_fcn()
                 self.acc = self.acc_fcn()
 
@@ -70,7 +70,8 @@ class network:
         self.fc1 = self.fcl(arranged, 256, "fc1", 0.70)  # 1024
         self.fc2 = self.fcl(self.fc1, 512, "fc2", 0.90)  # 2048
         self.fc3 = self.fcl(self.fc2, 128, "fc3", 1.00)   # 512
-        return self.fc3
+        self.norm = tf.nn.l2_normalize(self.fc3, axis=1)
+        return self.norm
 
     def loss_fcn(self):
         self.distance_matching = tf.multiply(self.match, self.dist,name="distance_matching")
@@ -115,8 +116,8 @@ def write_img_pair(left, right, value, folder, i):
         fd.write(data_rite)
 
 def histogram(sess, net, dataset, step=""):
-    n_bins = 100
-    bin_max = 300
+    n_bins = 50
+    bin_max = 2
     dist_diff=[]
     dist_same=[]
     file = open('dist_log.csv','w')
@@ -149,8 +150,8 @@ def histogram(sess, net, dataset, step=""):
         plt.savefig('Upped-'+step+'.png')
 
 # prepare data and tf.session
-#data_path = glob.glob('datasets/training*.tfrecords')
-data_path = glob.glob('datasets/valid_*.tfrecords')
+data_path = glob.glob('datasets/training*.tfrecords')
+#data_path = glob.glob('datasets/valid_*.tfrecords')
 dataset = tf.data.TFRecordDataset(data_path)
 dataset = dataset.map(_parse_function)  # Parse the record into tensors.
 dataset = dataset.shuffle(buffer_size=1000)
@@ -188,7 +189,7 @@ with tf.Session() as sess:
 
     writer = tf.summary.FileWriter("log/", sess.graph)
 
-    N = 0000
+    N = 50000
     train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
