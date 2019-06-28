@@ -130,13 +130,17 @@ def histogram(sess, net, dataset, step=""):
                 file.write('%d, %f\n' % (match, value))
             if (match):
                 dist_same.append(min(value, bin_max-0.001))
+                """
                 if (value < 2.):
                    write_img_pair(left, right, value, 'true_pos/', i)
                    continue 
+                """
             else:
                 dist_diff.append(min(value, bin_max-0.001))
+                """
                 if (value < 2. and value > 0.):
                     write_img_pair(left, right, value, 'false_pos/', i)
+                """
     file.close()
     fig, axs = plt.subplots(1, 2, sharey=True, tight_layout=True)
     # Fix the range
@@ -191,14 +195,14 @@ with tf.Session() as sess:
 
     writer = tf.summary.FileWriter("log/", sess.graph)
 
-    N = 50000
+    N = 150000
     train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord)
     for step in range(N):
         _, loss_v = sess.run([train_step, network.loss])
-        if step % 100 == 0:
+        if step % 500 == 0:
             #  print(str(step) + ", " +str(loss_v))
             ll = sess.run(network.acc)
             writer.add_summary(ll, step)
