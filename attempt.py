@@ -23,10 +23,9 @@ class network:
                 scope.reuse_variables()
                 out2 = self.side(self.x2)
 
-                #self.diff = tf.reshape(tf.subtract(out1, out2), [-1,out2.shape[3]])
                 self.diff = tf.subtract(out1, out2)
                 self.dist = tf.norm(self.diff, axis=1, name="get_distance_between_vecs")
-                self.margin = 2.0
+                self.margin = 350.0
                 self.loss = self.loss_fcn()
                 self.acc = self.acc_fcn()
 
@@ -72,8 +71,7 @@ class network:
         self.fc2 = self.fcl(self.fc1, 512, "fc2", 0.90)  # 2048
         self.fc3 = self.fcl(self.fc2, 128, "fc3", 1.00)   # 512
         self.out_reshape = tf.reshape(self.fc3, shape=[-1, 128], name="arrange_for_norm")
-        self.norm = tf.nn.l2_normalize(self.out_reshape, axis=1)
-        return self.norm
+        return self.out_reshape
 
     def loss_fcn(self):
         self.distance_matching = tf.multiply(self.match, self.dist,name="distance_matching")
@@ -118,8 +116,8 @@ def write_img_pair(left, right, value, folder, i):
         fd.write(data_rite)
 
 def histogram(sess, net, dataset, step=""):
-    n_bins = 50
-    bin_max = 2
+    n_bins = 250
+    bin_max = 500
     dist_diff=[]
     dist_same=[]
     file = open('dist_log.csv','w')
@@ -149,7 +147,7 @@ def histogram(sess, net, dataset, step=""):
     axs[0].set_ylim(top=2000)
     axs[1].hist(dist_diff, bins=n_bins, range=[0., bin_max])
     axs[1].set_title("Diff Image Dist")
-    axs[1].set_ylim(top=2000)
+    axs[1].set_ylim(top=500)
     if step == "":
         plt.show()
     else:
@@ -196,7 +194,7 @@ with tf.Session() as sess:
 
     writer = tf.summary.FileWriter("log/", sess.graph)
 
-    N = 150000
+    N = 50000
     train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
