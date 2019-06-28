@@ -3,6 +3,9 @@
 log/*
 model/*
 datasets/*
+*.png
+*.csv
+*.zip
 
 !*/.gitkeep
 
