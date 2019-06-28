@@ -154,6 +154,7 @@ def histogram(sess, net, dataset, step=""):
         plt.show()
     else:
         plt.savefig('Upped-'+step+'.png')
+        plt.close()
 
 # prepare data and tf.session
 data_path = glob.glob('datasets/training*.tfrecords')
