@@ -9,7 +9,7 @@ image_width = 320 #240
 image_height = 240 #192
 
 class network:
-    def __init__(self, input1, input2, match):
+    def __init__(self, input1, input2, match, na, nb, s):
         with arg_scope(resnet_v2.resnet_arg_scope()) as scope:
             with tf.variable_scope("", reuse=tf.AUTO_REUSE) as scope:
                 #self.inputs1 = tf.placeholder(tf.float32, shape=(None, 240, 192, 3))
@@ -18,6 +18,10 @@ class network:
                 self.x1 = tf.scalar_mul(0.003922, tf.cast(input1, dtype=tf.float32))
                 self.x2 = tf.scalar_mul(0.003922, tf.cast(input2, dtype=tf.float32))
                 self.match = tf.cast(match, dtype=tf.float32)
+                
+                self.num_a = na
+                self.num_b = nb
+                self.datasets = s
 
                 out1 = self.side(self.x1)
                 scope.reuse_variables()
@@ -25,7 +29,7 @@ class network:
 
                 self.diff = tf.subtract(out1, out2)
                 self.dist = tf.norm(self.diff, axis=1, name="get_distance_between_vecs")
-                self.margin = 350.0
+                self.margin = 500.0
                 self.loss = self.loss_fcn()
                 self.acc = self.acc_fcn()
 
@@ -89,19 +93,25 @@ def _parse_function(example_proto):
     feature = {
         'img_a': tf.FixedLenFeature([], tf.string),
         'img_b': tf.FixedLenFeature([], tf.string),
+        'num_a': tf.FixedLenFeature([], tf.int64),
+        'num_b': tf.FixedLenFeature([], tf.int64),
+        'set'  : tf.FixedLenFeature([], tf.string),
         'match': tf.FixedLenFeature([], tf.int64)
     }
     features = tf.parse_single_example(example_proto, feature)
     # Convert the image data from string back to the numbers
     image_a = tf.image.decode_jpeg(features['img_a'], channels=3, name="Steve")
     image_b = tf.image.decode_jpeg(features['img_b'], channels=3, name="Greg")
+    num_a = tf.cast(features['num_a'], tf.int32)
+    num_b = tf.cast(features['num_b'], tf.int32)
+    dataset = features['set']
     match = tf.cast(features['match'], tf.int32)
 
     # Reshape image data into the original shape
     #image_a = tf.reshape(image_a, [image_width, image_height, 3])
     #image_b = tf.reshape(image_b, [image_width, image_height, 3])
 
-    return image_a, image_b, match
+    return image_a, image_b, num_a, num_b, dataset, match
 
 def write_img_pair(left, right, value, folder, i):
     left_cast = tf.cast(tf.scalar_mul(255., tf.cast(left, dtype=tf.float32)), dtype=tf.uint8)
@@ -120,12 +130,11 @@ def histogram(sess, net, dataset, step=""):
     bin_max = 500
     dist_diff=[]
     dist_same=[]
-    file = open('dist_log.csv','w')
+    file = open('dist_log'+step+'.csv','w')
     for i in range(500):
-        [mb, dist, x1, x2] = sess.run([net.match, net.dist, net.x1, net.x2])
-        for (match, value, left, right) in zip(mb, dist, x1, x2):
-            if step=="":
-                file.write('%d, %f\n' % (match, value))
+        [mb, dist, x1, x2, sets, nums_a, nums_b] = sess.run([net.match, net.dist, net.x1, net.x2, net.datasets, net.num_a, net.num_b])
+        for (match, value, left, right, ds, num_a, num_b) in zip(mb, dist, x1, x2, sets, nums_a, nums_b):
+            file.write('%d, %f, %s, %d, %d\n' % (match, value, ds.decode("utf-8"), num_a, num_b))
             if (match):
                 dist_same.append(min(value, bin_max-0.001))
                 """
@@ -155,17 +164,18 @@ def histogram(sess, net, dataset, step=""):
         plt.close()
 
 # prepare data and tf.session
-data_path = glob.glob('datasets/training*.tfrecords')
+#data_path = ['datasets/training_Lip6IndoorDataSet.tfrecords','datasets/training_CityCentre.tfrecords']
+data_path = glob.glob('datasets/training_*.tfrecords')
 #data_path = glob.glob('datasets/valid_*.tfrecords')
 dataset = tf.data.TFRecordDataset(data_path)
 dataset = dataset.map(_parse_function)  # Parse the record into tensors.
-dataset = dataset.shuffle(buffer_size=1000)
+dataset = dataset.shuffle(buffer_size=30000)
 dataset = dataset.repeat()  # Repeat the input indefinitely.
 dataset = dataset.batch(15)
 iterator = dataset.make_initializable_iterator()
-[x1, x2, y] = iterator.get_next()
+[x1, x2, na, nb, s, y] = iterator.get_next()
 
-network = network(x1, x2, y)
+network = network(x1, x2, y, na, nb, s)
 
 #with tf.InteractiveSession() as sess:
 with tf.Session() as sess:
