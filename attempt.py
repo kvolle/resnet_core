@@ -26,7 +26,9 @@ class network:
                 out1 = self.side(self.x1)
                 scope.reuse_variables()
                 out2 = self.side(self.x2)
-
+                
+                self.a_len = tf.norm(out1, axis=1)
+                self.b_len = tf.norm(out2, axis=1)
                 self.diff = tf.subtract(out1, out2)
                 self.dist = tf.norm(self.diff, axis=1, name="get_distance_between_vecs")
                 self.margin = 500.0
@@ -126,28 +128,19 @@ def write_img_pair(left, right, value, folder, i):
         fd.write(data_rite)
 
 def histogram(sess, net, dataset, step=""):
-    n_bins = 250
-    bin_max = 500
+    n_bins = 150 
+    bin_max = 750
     dist_diff=[]
     dist_same=[]
     file = open('dist_log'+step+'.csv','w')
     for i in range(500):
-        [mb, dist, x1, x2, sets, nums_a, nums_b] = sess.run([net.match, net.dist, net.x1, net.x2, net.datasets, net.num_a, net.num_b])
+        [mb, dist, x1, x2, sets, nums_a, nums_b] = sess.run([net.match, net.dist, net.a_len, net.b_len, net.datasets, net.num_a, net.num_b])
         for (match, value, left, right, ds, num_a, num_b) in zip(mb, dist, x1, x2, sets, nums_a, nums_b):
-            file.write('%d, %f, %s, %d, %d\n' % (match, value, ds.decode("utf-8"), num_a, num_b))
+            file.write('%d, %f, %s, %d, %d, %f, %f\n' % (match, value, ds.decode("utf-8"), num_a, num_b, left, right))
             if (match):
                 dist_same.append(min(value, bin_max-0.001))
-                """
-                if (value < 2.):
-                   write_img_pair(left, right, value, 'true_pos/', i)
-                   continue 
-                """
             else:
                 dist_diff.append(min(value, bin_max-0.001))
-                """
-                if (value < 2. and value > 0.):
-                    write_img_pair(left, right, value, 'false_pos/', i)
-                """
     file.close()
     fig, axs = plt.subplots(1, 2, sharey=True, tight_layout=True)
     # Fix the range
@@ -165,8 +158,8 @@ def histogram(sess, net, dataset, step=""):
 
 # prepare data and tf.session
 #data_path = ['datasets/training_Lip6IndoorDataSet.tfrecords','datasets/training_CityCentre.tfrecords']
-data_path = glob.glob('datasets/training_*.tfrecords')
-#data_path = glob.glob('datasets/valid_*.tfrecords')
+#data_path = glob.glob('datasets/training_*.tfrecords')
+data_path = glob.glob('datasets/valid_*.tfrecords')
 dataset = tf.data.TFRecordDataset(data_path)
 dataset = dataset.map(_parse_function)  # Parse the record into tensors.
 dataset = dataset.shuffle(buffer_size=30000)
@@ -204,7 +197,7 @@ with tf.Session() as sess:
 
     writer = tf.summary.FileWriter("log/", sess.graph)
 
-    N = 50000
+    N = 0000
     train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
