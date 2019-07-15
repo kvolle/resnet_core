@@ -29,9 +29,10 @@ class network:
                 
                 self.a_len = tf.norm(out1, axis=1)
                 self.b_len = tf.norm(out2, axis=1)
+                self.dot = tf.reduce_sum (tf.multiply(out1, out2), 1, keep_dims=True)
                 self.diff = tf.subtract(out1, out2)
                 self.dist = tf.norm(self.diff, axis=1, name="get_distance_between_vecs")
-                self.margin = 500.0
+                self.margin = 250.0
                 self.loss = self.loss_fcn()
                 self.acc = self.acc_fcn()
 
@@ -72,9 +73,9 @@ class network:
     def side(self, input):
         net1, end_points1 = resnet_v2.resnet_v2_101(input, None, is_training=True, global_pool=False, output_stride=16)
         shrunk = tf.nn.max_pool(value=net1, ksize=[1, 3, 3, 1], strides=[1, 3, 3, 1], padding='SAME')
-        arranged = tf.reshape(shrunk, shape=[-1, 1, 1, 7 * 5 * 2048], name="arrange_for_fcl") #40*30
-        self.fc1 = self.fcl(arranged, 256, "fc1", 0.70)  # 1024
-        self.fc2 = self.fcl(self.fc1, 512, "fc2", 0.90)  # 2048
+        arranged = tf.reshape(shrunk, shape=[-1, 1, 1, 25*2048], name="arrange_for_fcl") #40*30
+        self.fc1 = self.fcl(arranged, 256, "fc1", 1.0)#0.70)  # 1024
+        self.fc2 = self.fcl(self.fc1, 512, "fc2", 1.0)#0.90)  # 2048
         self.fc3 = self.fcl(self.fc2, 128, "fc3", 1.00)   # 512
         self.out_reshape = tf.reshape(self.fc3, shape=[-1, 128], name="arrange_for_norm")
         return self.out_reshape
@@ -133,10 +134,10 @@ def histogram(sess, net, dataset, step=""):
     dist_diff=[]
     dist_same=[]
     file = open('dist_log'+step+'.csv','w')
-    for i in range(500):
-        [mb, dist, x1, x2, sets, nums_a, nums_b] = sess.run([net.match, net.dist, net.a_len, net.b_len, net.datasets, net.num_a, net.num_b])
-        for (match, value, left, right, ds, num_a, num_b) in zip(mb, dist, x1, x2, sets, nums_a, nums_b):
-            file.write('%d, %f, %s, %d, %d, %f, %f\n' % (match, value, ds.decode("utf-8"), num_a, num_b, left, right))
+    for i in range(150):
+        [mb, dist, x1, x2, sets, nums_a, nums_b, dots] = sess.run([net.match, net.dist, net.a_len, net.b_len, net.datasets, net.num_a, net.num_b, net.dot])
+        for (match, value, left, right, ds, num_a, num_b, dot) in zip(mb, dist, x1, x2, sets, nums_a, nums_b, dots):
+            file.write('%d, %f, %s, %d, %d, %f, %f, %f\n' % (match, value, ds.decode("utf-8"), num_a, num_b, left, right, dot/(left*right)))
             if (match):
                 dist_same.append(min(value, bin_max-0.001))
             else:
@@ -157,14 +158,14 @@ def histogram(sess, net, dataset, step=""):
         plt.close()
 
 # prepare data and tf.session
-#data_path = ['datasets/training_Lip6IndoorDataSet.tfrecords','datasets/training_CityCentre.tfrecords']
+data_path = ['datasets/training_CityCentre.tfrecords']
 #data_path = glob.glob('datasets/training_*.tfrecords')
-data_path = glob.glob('datasets/valid_*.tfrecords')
+#data_path = glob.glob('datasets/valid_*.tfrecords')
 dataset = tf.data.TFRecordDataset(data_path)
 dataset = dataset.map(_parse_function)  # Parse the record into tensors.
 dataset = dataset.shuffle(buffer_size=30000)
 dataset = dataset.repeat()  # Repeat the input indefinitely.
-dataset = dataset.batch(15)
+dataset = dataset.batch(1)
 iterator = dataset.make_initializable_iterator()
 [x1, x2, na, nb, s, y] = iterator.get_next()
 
@@ -197,14 +198,15 @@ with tf.Session() as sess:
 
     writer = tf.summary.FileWriter("log/", sess.graph)
 
+    start = 0
     N = 0000
     train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord)
-    for step in range(N):
+    for step in range(start, N):
         _, loss_v = sess.run([train_step, network.loss])
-        if step % 500 == 0:
+        if step % 100 == 0:
             #  print(str(step) + ", " +str(loss_v))
             ll = sess.run(network.acc)
             writer.add_summary(ll, step)
@@ -214,9 +216,9 @@ with tf.Session() as sess:
             quit()
         if step % 20000 == 0:
             tf_saver.save(sess, 'model/intermediate', global_step=step)
-        if step % 5000 == 0:
+        if step % 2000 == 0:
             histogram(sess, network, dataset, str(step))
     writer.close()
     tf_saver.save(sess, 'model/Final')
-    histogram(sess, network, dataset)
+    histogram(sess, network, dataset, str(N))
     print("Fin")
