@@ -200,14 +200,14 @@ with tf.Session() as sess:
     writer = tf.summary.FileWriter("log/", sess.graph)
 
     start = 0
-    N = 000
+    N = 50000
     train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord)
     update_op = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     for step in range(start, N):
-        _, _, loss_v = sess.run([train_step, update_op, network.loss])
+        _, loss_v = sess.run([train_step, network.loss])
         if step % 100 == 0:
             #  print(str(step) + ", " +str(loss_v))
             ll = sess.run(network.acc)
@@ -221,6 +221,8 @@ with tf.Session() as sess:
         if step % 2000 == 0:
             histogram(sess, network, dataset, str(step))
     writer.close()
+    for i in range(1500):
+        _ = sess.run([update_op])
     tf_saver.save(sess, 'model/Final')
     histogram(sess, network, dataset, str(N))
     print("Fin")
