@@ -72,6 +72,7 @@ class network:
                               padding='SAME')
     def side(self, input):
         net1, end_points1 = resnet_v2.resnet_v2_101(input, None, is_training=True, global_pool=False, output_stride=16)
+        #net1, end_points1 = resnet_v2.resnet_v2_101(input, None, is_training=False, global_pool=False, output_stride=16)
         shrunk = tf.nn.max_pool(value=net1, ksize=[1, 3, 3, 1], strides=[1, 3, 3, 1], padding='SAME')
         arranged = tf.reshape(shrunk, shape=[-1, 1, 1, 25*2048], name="arrange_for_fcl") #40*30
         self.fc1 = self.fcl(arranged, 256, "fc1", 1.0)#0.70)  # 1024
@@ -165,7 +166,7 @@ dataset = tf.data.TFRecordDataset(data_path)
 dataset = dataset.map(_parse_function)  # Parse the record into tensors.
 dataset = dataset.shuffle(buffer_size=30000)
 dataset = dataset.repeat()  # Repeat the input indefinitely.
-dataset = dataset.batch(1)
+dataset = dataset.batch(15)
 iterator = dataset.make_initializable_iterator()
 [x1, x2, na, nb, s, y] = iterator.get_next()
 
@@ -199,13 +200,14 @@ with tf.Session() as sess:
     writer = tf.summary.FileWriter("log/", sess.graph)
 
     start = 0
-    N = 0000
+    N = 000
     train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord)
+    update_op = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     for step in range(start, N):
-        _, loss_v = sess.run([train_step, network.loss])
+        _, _, loss_v = sess.run([train_step, update_op, network.loss])
         if step % 100 == 0:
             #  print(str(step) + ", " +str(loss_v))
             ll = sess.run(network.acc)
