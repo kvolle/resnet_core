@@ -23,17 +23,17 @@ class network:
                 self.num_b = nb
                 self.datasets = s
 
-                out1 = self.side(self.x1)
+                self.out1 = self.side(self.x1)
                 scope.reuse_variables()
-                out2 = self.side(self.x2)
+                self.out2 = self.side(self.x2)
                 
-                self.a_len = tf.norm(out1, axis=1)
-                self.b_len = tf.norm(out2, axis=1)
-                self.dot = tf.reduce_sum (tf.multiply(out1, out2), 1, keep_dims=True)
-                self.diff = tf.subtract(out1, out2)
+                self.a_len = tf.norm(self.out1, axis=1)
+                self.b_len = tf.norm(self.out2, axis=1)
+                self.dot = tf.reduce_sum (tf.multiply(self.out1, self.out2), 1, keep_dims=True)
+                self.diff = tf.subtract(self.out1, self.out2)
                 self.dist = tf.norm(self.diff, axis=1, name="get_distance_between_vecs")
                 self.margin = 250.0
-                self.loss = self.loss_fcn()
+                self.loss = self.cosine_loss() #self.loss_fcn()
                 self.acc = self.acc_fcn()
 
     def fcl(self, input_layer, nodes, name, keep_rate=1.):
@@ -89,6 +89,12 @@ class network:
 
         return tf.reduce_sum(self.distance_matching)+ tf.reduce_sum(self.distance_unmatched)
 
+    def cosine_loss(self):
+        cos = tf.losses.cosine_distance(self.out1, self.out2, axis=1)
+        self.match_compliment = tf.subtract(tf.constant(1, dtype=tf.float32), self.match)
+        self.distance_matching = tf.multiply(self.match, tf.subtract(tf.constant(1, dtype=tf.float32), cos), name="cos_matching")
+        self.distance_unmatched = tf.multiply(self.match_compliment, cos, name="cos_non")
+        return tf.reduce_sum(self.distance_matching) + tf.reduce_sum(self.distance_unmatched)
     def acc_fcn(self):
         return tf.summary.scalar("loss", self.loss_fcn())
 
