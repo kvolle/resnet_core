@@ -71,14 +71,14 @@ class network:
                               strides=[1, 2, 2, 1],
                               padding='SAME')
     def side(self, input):
-        net1, end_points1 = resnet_v2.resnet_v2_101(input, None, is_training=True, global_pool=False, output_stride=16)
+        net1, end_points1 = resnet_v2.resnet_v2_50(input, None, is_training=True, global_pool=False, output_stride=16)
         #net1, end_points1 = resnet_v2.resnet_v2_101(input, None, is_training=False, global_pool=False, output_stride=16)
-        shrunk = tf.nn.max_pool(value=net1, ksize=[1, 3, 3, 1], strides=[1, 3, 3, 1], padding='SAME')
-        arranged = tf.reshape(shrunk, shape=[-1, 1, 1, 25*2048], name="arrange_for_fcl") #40*30
-        self.fc1 = self.fcl(arranged, 256, "fc1", 1.0)#0.70)  # 1024
-        self.fc2 = self.fcl(self.fc1, 512, "fc2", 1.0)#0.90)  # 2048
-        self.fc3 = self.fcl(self.fc2, 128, "fc3", 1.00)   # 512
-        self.out_reshape = tf.reshape(self.fc3, shape=[-1, 128], name="arrange_for_norm")
+        shrunk = tf.nn.max_pool(value=net1, ksize=[1, 7, 7, 1], strides=[1, 7, 7, 1], padding='SAME')
+        arranged = tf.reshape(shrunk, shape=[-1, 1, 1, 4*2048], name="arrange_for_fcl") 
+        self.fc1 = self.fcl(arranged, 2048, "fc1", 1.0)#0.70)  # 1024
+        self.fc2 = self.fcl(self.fc1, 1024, "fc2", 1.0)#0.90)  # 2048
+        self.fc3 = self.fcl(self.fc2, 512, "fc3", 1.00)   # 512
+        self.out_reshape = tf.reshape(self.fc3, shape=[-1, 512], name="arrange_for_norm")
         return self.out_reshape
 
     def loss_fcn(self):
@@ -162,7 +162,7 @@ def histogram(sess, net, dataset, step=""):
     if step == "":
         plt.show()
     else:
-        plt.savefig('Upped-'+step+'.png')
+        #plt.savefig('Upped-'+step+'.png')
         plt.close()
 
 # prepare data and tf.session
@@ -173,7 +173,7 @@ dataset = tf.data.TFRecordDataset(data_path)
 dataset = dataset.map(_parse_function)  # Parse the record into tensors.
 dataset = dataset.shuffle(buffer_size=30000)
 dataset = dataset.repeat()  # Repeat the input indefinitely.
-dataset = dataset.batch(15)
+dataset = dataset.batch(25)
 iterator = dataset.make_initializable_iterator()
 [x1, x2, na, nb, s, y] = iterator.get_next()
 
@@ -188,8 +188,9 @@ with tf.Session() as sess:
         print("Loading from model")
         tf_saver.restore(sess,'./model/Final')
     else:
+        """
         print("Loading from pretrained")
-        variables_can_be_restored = tf.train.list_variables("./pretrained_model/")
+        variables_can_be_restored = tf.train.list_variables("./pretrained_model50/")
         list_of_variables = []
         for v in variables_can_be_restored:
             list_of_variables.append(v[0]+":0")
@@ -203,13 +204,14 @@ with tf.Session() as sess:
 
         tf_pretrained_saver = tf.train.Saver(pretrained_vars, name="pretrained_saver")
         tf_pretrained_saver.restore(sess, "./pretrained_model/model.ckpt-30452")
-
+        """
+        pass
     writer = tf.summary.FileWriter("log/", sess.graph)
 
-    start = 0
-    N = 100000
+    start = 00000
+    N = 250000
     batch_n = 10000 # 1500
-    train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(network.loss)
+    train_step = tf.train.GradientDescentOptimizer(0.0001).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord)
