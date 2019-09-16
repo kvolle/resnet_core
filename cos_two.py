@@ -36,11 +36,15 @@ class network:
                 self.loss = self.cosine_loss() #self.loss_fcn()
                 self.acc = self.acc_fcn()
 
-    def fcl(self, input_layer, nodes, name, keep_rate=1.):
+    def fcl(self, input_layer, nodes, in_name, keep_rate=1., norm=False):
         # Pass th#rough to conv_layer. renamed function for easier readability
-        layer = self.conv_layer(input_layer, [1, 1, input_layer.shape[3], nodes], name, padding='VALID', stride=1, pooling=False)
-#        out = tf.nn.dropout(layer, rate=#drop_rate)
-        out = tf.nn.dropout(layer, keep_prob=keep_rate)
+        layer = self.conv_layer(input_layer, [1, 1, input_layer.shape[3], nodes], in_name, padding='VALID', stride=1, pooling=False)
+        #out = tf.nn.dropout(layer, keep_prob=keep_rate)
+        if norm:
+            relu = tf.nn.relu(layer, in_name+"_relu")
+            out = tf.layers.batch_normalization(relu, name=in_name+"_batch")
+        else:
+            out = layer
         return out
 
     def conv_layer(self, input_layer, weights, name, padding, stride=1, pooling=True):
@@ -75,10 +79,10 @@ class network:
         #net1, end_points1 = resnet_v2.resnet_v2_101(input, None, is_training=False, global_pool=False, output_stride=16)
         shrunk = tf.nn.max_pool(value=net1, ksize=[1, 7, 7, 1], strides=[1, 7, 7, 1], padding='SAME')
         arranged = tf.reshape(shrunk, shape=[-1, 1, 1, 4*2048], name="arrange_for_fcl") 
-        self.fc1 = self.fcl(arranged, 2048, "fc1", 1.0)#0.70)  # 1024
-        self.fc2 = self.fcl(self.fc1, 1024, "fc2", 1.0)#0.90)  # 2048
-        self.fc3 = self.fcl(self.fc2, 512, "fc3", 1.00)   # 512
-        self.out_reshape = tf.reshape(self.fc3, shape=[-1, 512], name="arrange_for_norm")
+        self.fc1 = self.fcl(arranged, 3072, "fc1", 1.0, True)#0.70)  # 1024
+        self.fc2 = self.fcl(self.fc1, 1536, "fc2", 1.0, True)#0.90)  # 2048
+        self.fc3 = self.fcl(self.fc2, 770, "fc3", 1.00, False)   # 512
+        self.out_reshape = tf.reshape(self.fc3, shape=[-1, 770], name="arrange_for_norm")
         return self.out_reshape
 
     def loss_fcn(self):
@@ -167,7 +171,7 @@ def histogram(sess, net, dataset, step=""):
 
 # prepare data and tf.session
 #data_path = ['datasets/valid_CityCentre.tfrecords']
-data_path = glob.glob('datasets/training_*.tfrecords')
+data_path = glob.glob('datasets/training_gibson.tfrecords')
 #data_path = glob.glob('datasets/valid_*.tfrecords')
 dataset = tf.data.TFRecordDataset(data_path)
 dataset = dataset.map(_parse_function)  # Parse the record into tensors.
@@ -208,10 +212,10 @@ with tf.Session() as sess:
         pass
     writer = tf.summary.FileWriter("log/", sess.graph)
 
-    start = 00000
-    N = 250000
-    batch_n = 10000 # 1500
-    train_step = tf.train.GradientDescentOptimizer(0.0001).minimize(network.loss)
+    start = 000
+    N = 50000
+    batch_n = 000 # 1500 # Used to lock the normalization values
+    train_step = tf.train.GradientDescentOptimizer(0.001).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord)
