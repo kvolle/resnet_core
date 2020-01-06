@@ -95,7 +95,7 @@ class network:
         #return [tf.summary.histogram("Layer1", self.out_1), tf.summary.histogram("Layer2", self.out_2), tf.summary.histogram("Layer3", self.out_3), tf.summary.histogram("Layer4", self.out_4), tf.summary.histogram("Layer5", self.out_5), tf.summary.histogram("Layer6", self.out_6), tf.summary.histogram("Layer7", self.out_7), tf.summary.histogram("Layer8", self.out_8)]
 
     def loss_fcn(self):
-        return self.pos_fcn() + self.neg_fcn()
+        return self.pos_fcn + self.neg_fcn
 
     def l2_pos(self):
         self.distance_matching = tf.multiply(self.match, self.dist,name="distance_matching")
