@@ -31,10 +31,11 @@ class network:
 
                 self.a_norm = tf.nn.l2_normalize(self.out1, axis=1)
                 self.b_norm = tf.nn.l2_normalize(self.out2, axis=1)
+#                self.dot = tf.reduce_sum (tf.multiply(self.a_norm, self.b_norm, name="inner_prod_mult"), 1, keep_dims=True, name="inner_prod_sum")
                 self.dot = tf.reduce_sum (tf.multiply(self.a_norm, self.b_norm, name="inner_prod_mult"), 1, keep_dims=True, name="inner_prod_sum")
                 self.diff = tf.subtract(self.out1, self.out2)
                 self.dist = tf.norm(self.diff, axis=1, name="get_distance_between_vecs")
-                self.margin = 250.0
+                self.margin = 10.0
                 self.pos_fcn = self.cos_pos()  # self.l2_pos()
                 self.neg_fcn = self.cos_neg()  # self.l2_neg()
                 self.loss = self.loss_fcn()
@@ -79,19 +80,18 @@ class network:
                               ksize=[1, 2, 2, 1],
                               strides=[1, 2, 2, 1],
                               padding='SAME')
-    def side(self, input):
-        net1, end_points1 = resnet_v2.resnet_v2_50(input, None, is_training=True, global_pool=False, output_stride=16)
+    def side(self, input_layer):
+        net1, end_points1 = resnet_v2.resnet_v2_50(input_layer, None, is_training=True, global_pool=False, output_stride=16)
         #net1, end_points1 = resnet_v2.resnet_v2_101(input, None, is_training=False, global_pool=False, output_stride=16)
-        shrunk = tf.nn.max_pool(value=net1, ksize=[1, 7, 7, 1], strides=[1, 7, 7, 1], padding='SAME') # with 224 this reduces to 2x2, but reduces to 15x15 for 256*256
-        arranged = tf.reshape(shrunk, shape=[-1, 1, 1, 4*2048], name="arrange_for_fcl") 
-        self.fc1 = self.fcl(arranged, 3072, "fc1", 1.0, True)#0.70)  # 1024
+        self.arranged = tf.reshape(net1, shape=[-1, 1, 1, 16*2048], name="arrange_for_fcl") 
+        self.fc1 = self.fcl(self.arranged, 3072, "fc1", 1.0, True)#0.70)  # 1024
         self.fc2 = self.fcl(self.fc1, 1536, "fc2", 1.0, True)#0.90)  # 2048
         self.fc3 = self.fcl(self.fc2, 770, "fc3", 1.00, False)   # 512
         self.out_reshape = tf.reshape(self.fc3, shape=[-1, 770], name="arrange_for_norm")
         return self.out_reshape
 
     def hist_summary(self):
-        return [tf.summary.histogram("Layer1", self.out_1), tf.summary.histogram("Layer2", self.out_2), tf.summary.histogram("Layer3", self.out_3), tf.summary.histogram("Layer6", self.out_6), tf.summary.histogram("Layer7", self.out_7), tf.summary.histogram("Layer8", self.out_8)]
+        return [tf.summary.histogram("arranged", self.arranged), tf.summary.histogram("Layer1", self.fc1), tf.summary.histogram("Layer2", self.fc2), tf.summary.histogram("Layer3", self.fc3)]
         #return [tf.summary.histogram("Layer1", self.out_1), tf.summary.histogram("Layer2", self.out_2), tf.summary.histogram("Layer3", self.out_3), tf.summary.histogram("Layer4", self.out_4), tf.summary.histogram("Layer5", self.out_5), tf.summary.histogram("Layer6", self.out_6), tf.summary.histogram("Layer7", self.out_7), tf.summary.histogram("Layer8", self.out_8)]
 
     def loss_fcn(self):
@@ -107,22 +107,22 @@ class network:
         self.distance_unmatched = tf.multiply(non_match, self.match_compliment, name = "distance_unmatched")
         return tf.reduce_sum(self.distance_unmatched)
 
-    def cosine_pos(self):
+    def cos_pos(self):
         self.distance_matching_cos = tf.multiply(self.match, tf.subtract(tf.constant(1, dtype=tf.float32, name="one_minus_cos"), self.dot), name="cos_matching")
         return tf.reduce_sum(self.distance_matching_cos, name="dist_match_sum")
 
-    def cosine_neg(self):
+    def cos_neg(self):
         self.match_compliment = tf.subtract(tf.constant(1, dtype=tf.float32,name="comp_const"), self.match, name="match_compliment")
         self.distance_unmatched_cos = tf.multiply(self.match_compliment, self.dot, name="cos_non")
         return tf.reduce_sum(self.distance_unmatched_cos, name="dist_unmatch_sum")
 
-    def cosine_loss(self):
+#    def cosine_loss(self):
 #        mag = tf.multiply(self.a_len, self.b_len, name="magnitudes")
 #        cos = tf.divide(self.dot, mag, "cosine_dist")
-        return self.cosine_pos() + self.cosine_neg()
+#        return self.cos_pos() + self.cos_neg()
 
     def acc_fcn(self):
-        return [tf.summary.scalar("loss", self.cosine_loss()), tf.summary.scalar("Pos_loss", self.cosine_pos()), tf.summary.scalar("Neg_loss", self.cosine_neg()), tf.summary.scalar("Match", tf.reduce_sum(self.match))]
+        return [tf.summary.scalar("loss", self.loss_fcn()), tf.summary.scalar("Pos_loss", self.pos_fcn), tf.summary.scalar("Neg_loss", self.neg_fcn), tf.summary.scalar("Match", tf.reduce_sum(self.match))]
 
 
 def _parse_function(example_proto):
@@ -191,11 +191,7 @@ def histogram(sess, net, dataset, step=""):
         plt.close()
 
 # prepare data and tf.session
-data_path = ['datasets/training_gibson_equal.tfrecords']
-#data_path = ['datasets/training_CityCentre.tfrecords']
-#data_path = glob.glob('datasets/training_CityCentre.tfrecords')
-#data_path = glob.glob('datasets/training_LipSmallPNG.tfrecords')
-#data_path = glob.glob('datasets/valid_*.tfrecords')
+data_path = ['datasets/training_gibson_small.tfrecords']
 dataset = tf.data.TFRecordDataset(data_path)
 dataset = dataset.map(_parse_function)  # Parse the record into tensors.
 dataset = dataset.shuffle(buffer_size=180000)
@@ -213,35 +209,37 @@ with tf.Session() as sess:
     sess.run(iterator.initializer)
     tf_saver = tf.train.Saver(name="saver")
     """
-    if tf.train.checkpoint_exists("./model/Final"):
+    if tf.train.checkpoint_exists("./model/Final_NOPE"):
         print("Loading from model")
         tf_saver.restore(sess,'./model/Final')
         list_after_load = [v.name for v in tf.global_variables()]
         print(list_after_load)
 
     else:
-    """
-    """
         print("Loading from pretrained")
-        variables_can_be_restored = tf.train.list_variables("./pretrained_model/")#50/")
+        variables_can_be_restored = tf.train.list_variables("./pretrained_model/resnet_50/")#50/")
         list_of_variables = []
         for v in variables_can_be_restored:
             list_of_variables.append(v[0]+":0")
-        globals=[]
+            print(v[0])
+        global_vars=[]
+        print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         for v in tf.global_variables():
-            globals.append(v.name)
-        reduced_list = list(set(globals).intersection(list_of_variables))
+            global_vars.append(v.name)
+            print(v.name)
+        reduced_list = list(set(global_vars).intersection(list_of_variables))
         pretrained_vars = tf.contrib.framework.get_variables_to_restore(include=reduced_list)
         tf_pretrained_saver = tf.train.Saver(pretrained_vars, name="pretrained_saver")
-        tf_pretrained_saver.restore(sess, "./pretrained_model/model.ckpt-30452")
-    """
+        tf_pretrained_saver.restore(sess, "./pretrained_model/resnet_50/model.ckpt-225207")
+        #tf_pretrained_saver.restore(sess, "./pretrained_model/model.ckpt-30452")
     #    pass
+    """
     writer = tf.summary.FileWriter("log/", sess.graph)
 
     start = 00
     N = 10000 
-    batch_n = 500 # 1500 # Used to lock the normalization values
-    train_step = tf.train.GradientDescentOptimizer(0.001).minimize(network.loss)
+    batch_n = 00 # 1500 # Used to lock the normalization values
+    train_step = tf.train.GradientDescentOptimizer(0.01).minimize(network.loss)
     # Create a coordinator and run all QueueRunner objects
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord)
@@ -255,6 +253,11 @@ with tf.Session() as sess:
             writer.add_summary(lp, step)
             writer.add_summary(ln, step)
             writer.add_summary(m, step)
+            [h1, h2, h3, h4] = sess.run(network.hist)
+            writer.add_summary(h1, step)
+            writer.add_summary(h2, step)
+            writer.add_summary(h3, step)
+            writer.add_summary(h4, step)
         if np.isnan(loss_v):
             print('Model diverged with loss = NaN')
             tf_saver.save(sess, 'model/Final')
